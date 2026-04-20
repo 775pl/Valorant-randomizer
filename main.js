@@ -17,15 +17,32 @@ let currentWeaponCatFilter = 'all';
 async function init() {
   showLoading(true);
   try {
-    const [agentsRes, weaponsRes] = await Promise.all([
+    // Fetch agents in both languages: English for role names (filter keys), French for display
+    const [agentsRes, weaponsRes, agentsEnRes] = await Promise.all([
       fetch(`${API_BASE}/agents?isPlayableCharacter=true&language=fr-FR`),
-      fetch(`${API_BASE}/weapons?language=fr-FR`)
+      fetch(`${API_BASE}/weapons?language=fr-FR`),
+      fetch(`${API_BASE}/agents?isPlayableCharacter=true&language=en-US`)
     ]);
     const agentsData = await agentsRes.json();
     const weaponsData = await weaponsRes.json();
+    const agentsEnData = await agentsEnRes.json();
 
-    agents = agentsData.data || [];
-    weapons = (weaponsData.data || []).filter(w => w.shopData && w.shopData.cost > 0);
+    // Build a map of uuid -> EN role name for filter matching
+    const roleEnMap = {};
+    for (const a of (agentsEnData.data || [])) {
+      if (a.role) roleEnMap[a.uuid] = a.role.displayName; // e.g. "Duelist"
+    }
+
+    agents = (agentsData.data || []).map(a => ({
+      ...a,
+      _roleNameEn: roleEnMap[a.uuid] || (a.role ? a.role.displayName : '')
+    }));
+
+    weapons = (weaponsData.data || []).filter(w => w.shopData && w.shopData.cost > 0).map(w => ({
+      ...w,
+      // Normalize category text: remove accents, lowercase → used for filter comparison
+      _catKey: normalizeCat(w.shopData.categoryText || w.shopData.category || '')
+    }));
   } catch (err) {
     showToast('Erreur de chargement de l\'API. Vérifiez votre connexion.');
     console.error(err);
@@ -35,6 +52,21 @@ async function init() {
 
   initParticles();
 }
+
+// Normalize category text for comparison (strip accents, lowercase)
+function normalizeCat(str) {
+  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+// Category key mapping (what the chip data-cat sends → normalized match)
+const CAT_MAP = {
+  'Rifle':        'assault rifle',
+  'SMG':          'smg',
+  'Shotgun':      'shotgun',
+  'Sniper Rifle': 'sniper rifle',
+  'Heavy':        'heavy',
+  'Sidearm':      'sidearm',
+};
 
 // =============================================
 // TABS
@@ -77,7 +109,8 @@ window.randomizeAgent = function() {
 
   let pool = agents;
   if (currentRoleFilter !== 'all') {
-    pool = agents.filter(a => a.role && a.role.displayName.toLowerCase() === currentRoleFilter.toLowerCase());
+    // Use the English role name stored during init for reliable comparison
+    pool = agents.filter(a => a._roleNameEn && a._roleNameEn.toLowerCase() === currentRoleFilter.toLowerCase());
   }
 
   if (!pool.length) { showToast('Aucun agent trouvé pour ce rôle.'); return; }
@@ -158,7 +191,9 @@ window.randomizeWeapon = function() {
   let pool = weapons.filter(w => w.shopData.cost <= budget);
 
   if (currentWeaponCatFilter !== 'all') {
-    pool = pool.filter(w => w.shopData.category === currentWeaponCatFilter);
+    // Match using normalized categoryText (e.g. 'Assault Rifle' → 'assault rifle')
+    const targetKey = normalizeCat(CAT_MAP[currentWeaponCatFilter] || currentWeaponCatFilter);
+    pool = pool.filter(w => w._catKey.includes(targetKey));
   }
 
   if (!pool.length) {
