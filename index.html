@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="Randomisez vos agents et armes Valorant selon votre budget. Découvrez une combinaison aléatoire à chaque partie !" />
+  <title>VALORANT RANDOMIZER</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- Background particles -->
+  <div class="bg-particles" id="bgParticles"></div>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">⬡</span>
+        <span class="logo-text">VALORANT<span class="logo-sub">RANDOMIZER</span></span>
+      </div>
+      <nav class="tabs" role="tablist">
+        <button class="tab active" id="tab-agent" role="tab" aria-selected="true" aria-controls="section-agent" onclick="switchTab('agent')">
+          <span class="tab-icon">👤</span> AGENTS
+        </button>
+        <button class="tab" id="tab-weapon" role="tab" aria-selected="false" aria-controls="section-weapon" onclick="switchTab('weapon')">
+          <span class="tab-icon">🔫</span> ARMES
+        </button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="main">
+
+    <!-- ===== AGENT SECTION ===== -->
+    <section id="section-agent" class="section active" aria-labelledby="tab-agent">
+      <div class="section-header">
+        <h1 class="section-title">AGENT ALÉATOIRE</h1>
+        <p class="section-subtitle">Découvrez quel agent vous jouerez ce round</p>
+      </div>
+
+      <!-- Filters -->
+      <div class="filters">
+        <span class="filter-label">FILTRER PAR RÔLE</span>
+        <div class="filter-chips" id="roleFilters">
+          <button class="chip active" data-role="all" onclick="setRoleFilter(this, 'all')">Tous</button>
+          <button class="chip" data-role="Duelist" onclick="setRoleFilter(this, 'Duelist')">Duelliste</button>
+          <button class="chip" data-role="Initiator" onclick="setRoleFilter(this, 'Initiator')">Initiateur</button>
+          <button class="chip" data-role="Controller" onclick="setRoleFilter(this, 'Controller')">Contrôleur</button>
+          <button class="chip" data-role="Sentinel" onclick="setRoleFilter(this, 'Sentinel')">Sentinelle</button>
+        </div>
+      </div>
+
+      <!-- Result Card -->
+      <div class="result-area" id="agentResultArea">
+        <div class="card-placeholder" id="agentPlaceholder">
+          <div class="placeholder-icon">?</div>
+          <p>Cliquez sur le bouton pour randomiser un agent</p>
+        </div>
+        <div class="agent-card hidden" id="agentCard">
+          <div class="agent-card-bg" id="agentCardBg"></div>
+          <div class="agent-card-content">
+            <div class="agent-portrait-wrap">
+              <img id="agentPortrait" src="" alt="Portrait Agent" class="agent-portrait" />
+              <div class="agent-glow" id="agentGlow"></div>
+            </div>
+            <div class="agent-info">
+              <div class="agent-role-badge" id="agentRoleBadge">
+                <img id="agentRoleIcon" src="" alt="Rôle" class="role-icon" />
+                <span id="agentRoleName"></span>
+              </div>
+              <h2 class="agent-name" id="agentName"></h2>
+              <p class="agent-description" id="agentDescription"></p>
+              <div class="agent-abilities" id="agentAbilities"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn-randomize" id="btnRandomizeAgent" onclick="randomizeAgent()">
+        <span class="btn-inner">
+          <span class="btn-label">RANDOMISER</span>
+          <span class="btn-arrow">→</span>
+        </span>
+      </button>
+    </section>
+
+    <!-- ===== WEAPON SECTION ===== -->
+    <section id="section-weapon" class="section" aria-labelledby="tab-weapon">
+      <div class="section-header">
+        <h1 class="section-title">ARME ALÉATOIRE</h1>
+        <p class="section-subtitle">Entrez votre budget et découvrez l'arme idéale</p>
+      </div>
+
+      <!-- Budget Input -->
+      <div class="budget-area">
+        <label class="budget-label" for="budgetInput">💰 BUDGET (CRÉDITS)</label>
+        <div class="budget-input-wrap">
+          <input type="number" id="budgetInput" class="budget-input" min="0" max="9000" value="3900" placeholder="ex: 3900" />
+          <span class="budget-currency">CR</span>
+        </div>
+        <div class="budget-presets">
+          <span class="preset-label">Presets :</span>
+          <button class="preset-btn" onclick="setBudget(800)" title="Eco">800</button>
+          <button class="preset-btn" onclick="setBudget(1600)" title="Force buy">1600</button>
+          <button class="preset-btn" onclick="setBudget(2900)" title="Demi-buy">2900</button>
+          <button class="preset-btn" onclick="setBudget(3900)" title="Full buy">3900</button>
+          <button class="preset-btn" onclick="setBudget(4700)" title="Max buy">4700</button>
+        </div>
+      </div>
+
+      <!-- Category filter -->
+      <div class="filters">
+        <span class="filter-label">FILTRER PAR CATÉGORIE</span>
+        <div class="filter-chips" id="weaponCatFilters">
+          <button class="chip active" data-cat="all" onclick="setWeaponCatFilter(this, 'all')">Toutes</button>
+          <button class="chip" data-cat="Rifle" onclick="setWeaponCatFilter(this, 'Rifle')">Fusils</button>
+          <button class="chip" data-cat="SMG" onclick="setWeaponCatFilter(this, 'SMG')">SMG</button>
+          <button class="chip" data-cat="Shotgun" onclick="setWeaponCatFilter(this, 'Shotgun')">Shotguns</button>
+          <button class="chip" data-cat="Sniper Rifle" onclick="setWeaponCatFilter(this, 'Sniper Rifle')">Snipers</button>
+          <button class="chip" data-cat="Heavy" onclick="setWeaponCatFilter(this, 'Heavy')">Lourdes</button>
+          <button class="chip" data-cat="Sidearm" onclick="setWeaponCatFilter(this, 'Sidearm')">Pistolets</button>
+        </div>
+      </div>
+
+      <!-- Result -->
+      <div class="result-area" id="weaponResultArea">
+        <div class="card-placeholder" id="weaponPlaceholder">
+          <div class="placeholder-icon">?</div>
+          <p>Cliquez sur le bouton pour randomiser une arme</p>
+        </div>
+        <div class="weapon-card hidden" id="weaponCard">
+          <div class="weapon-card-inner">
+            <div class="weapon-header">
+              <div class="weapon-meta">
+                <div class="weapon-category" id="weaponCategory"></div>
+                <h2 class="weapon-name" id="weaponName"></h2>
+                <div class="weapon-cost-badge" id="weaponCostBadge">
+                  <span class="cost-icon">💰</span>
+                  <span id="weaponCost"></span> CR
+                </div>
+              </div>
+              <img id="weaponImage" src="" alt="Arme" class="weapon-image" />
+            </div>
+            <div class="weapon-stats" id="weaponStats"></div>
+          </div>
+        </div>
+      </div>
+
+      <button class="btn-randomize" id="btnRandomizeWeapon" onclick="randomizeWeapon()">
+        <span class="btn-inner">
+          <span class="btn-label">RANDOMISER</span>
+          <span class="btn-arrow">→</span>
+        </span>
+      </button>
+    </section>
+
+  </main>
+
+  <!-- Loading overlay -->
+  <div class="loading-overlay hidden" id="loadingOverlay">
+    <div class="loading-spinner">
+      <div class="spinner-ring"></div>
+      <span class="loading-text">CHARGEMENT...</span>
+    </div>
+  </div>
+
+  <!-- Toast notification -->
+  <div class="toast hidden" id="toast"></div>
+
+  <script type="module" src="/main.js"></script>
+</body>
+</html>
