@@ -54,6 +54,9 @@ async function init() {
     showLoading(false);
   }
 
+  document
+    .getElementById('budgetInput')
+    .addEventListener('input', updateWeaponCategoryAvailability);
   initParticles();
 }
 
@@ -80,7 +83,7 @@ const CAT_MAP = {
 // TABS
 // =============================================
 function updateWeaponCategoryAvailability() {
-  const budget = parseInt(document.getElementById('budgetInput').addEventListener('input', updateWeaponCategoryAvailability).value, 10);
+  const budget = parseInt(document.getElementById('budgetInput').value, 10);
   if (isNaN(budget) || budget < 0) return;
 
   const availableCats = new Set(
@@ -218,13 +221,15 @@ function displayAgent(agent) {
 // RANDOMIZE WEAPON
 // =============================================
 window.setBudget = function (amount) {
-  document.getElementById('budgetInput').addEventListener('input', updateWeaponCategoryAvailability).value = amount;
+  document
+    .getElementById('budgetInput')
+    .addEventListener('input', updateWeaponCategoryAvailability);
 };
 
 window.randomizeWeapon = function () {
   if (!weapons.length) { showToast('Armes non chargées. Rechargez la page.'); return; }
 
-  const budget = parseInt(document.getElementById('budgetInput').addEventListener('input', updateWeaponCategoryAvailability).value, 10);
+  const budget = parseInt(document.getElementById('budgetInput').value, 10);
   if (isNaN(budget) || budget < 0) { showToast('Entrez un budget valide.'); return; }
 
   let pool = weapons.filter(w => w.shopData.cost <= budget);
@@ -232,7 +237,7 @@ window.randomizeWeapon = function () {
   if (currentWeaponCatFilter !== 'all') {
     // Match using normalized categoryText (e.g. 'Assault Rifle' → 'assault rifle')
     const targetKey = normalizeCat(CAT_MAP[currentWeaponCatFilter] || currentWeaponCatFilter);
-    pool = pool.filter(w => w._catKey.includes(targetKey));
+    pool = pool.filter(w => w._catKey === targetKey);
   }
 
   if (!pool.length) {
