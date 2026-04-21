@@ -17,7 +17,6 @@ let currentWeaponCatFilter = 'all';
 async function init() {
   showLoading(true);
   try {
-    // Fetch agents in both languages: English for role names (filter keys), French for display
     const [agentsRes, weaponsRes, agentsEnRes] = await Promise.all([
       fetch(`${API_BASE}/agents?isPlayableCharacter=true&language=fr-FR`),
       fetch(`${API_BASE}/weapons?language=fr-FR`),
@@ -27,10 +26,9 @@ async function init() {
     const weaponsData = await weaponsRes.json();
     const agentsEnData = await agentsEnRes.json();
 
-    // Build a map of uuid -> EN role name for filter matching
     const roleEnMap = {};
     for (const a of (agentsEnData.data || [])) {
-      if (a.role) roleEnMap[a.uuid] = a.role.displayName; // e.g. "Duelist"
+      if (a.role) roleEnMap[a.uuid] = a.role.displayName;
     }
 
     agents = (agentsData.data || []).map(a => ({
@@ -43,8 +41,7 @@ async function init() {
       .map(w => ({
         ...w,
         _catKey: normalizeCat(
-          (w.category || '')
-            .replace('EEquippableCategory::', '')
+          (w.category || '').replace('EEquippableCategory::', '')
         )
       }));
   } catch (err) {
@@ -57,8 +54,16 @@ async function init() {
   document
     .getElementById('budgetInput')
     .addEventListener('input', updateWeaponCategoryAvailability);
+
+  updateWeaponCategoryAvailability();
   initParticles();
 }
+
+window.setBudget = function (amount) {
+  const input = document.getElementById('budgetInput');
+  input.value = amount;
+  updateWeaponCategoryAvailability();
+};
 
 // Normalize category text for comparison (strip accents, lowercase)
 function normalizeCat(str) {
@@ -138,6 +143,8 @@ window.setRoleFilter = function (el, role) {
 // WEAPON CATEGORY FILTER
 // =============================================
 window.setWeaponCatFilter = function (el, cat) {
+  if (el.disabled) return;
+
   document.querySelectorAll('#weaponCatFilters .chip').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
   currentWeaponCatFilter = cat;
@@ -221,9 +228,9 @@ function displayAgent(agent) {
 // RANDOMIZE WEAPON
 // =============================================
 window.setBudget = function (amount) {
-  document
-    .getElementById('budgetInput')
-    .addEventListener('input', updateWeaponCategoryAvailability);
+  const input = document.getElementById('budgetInput');
+  input.value = amount;
+  updateWeaponCategoryAvailability();
 };
 
 window.randomizeWeapon = function () {
