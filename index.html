@@ -1,15 +1,20 @@
 <!DOCTYPE html>
 <html lang="fr">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description" content="Randomisez vos agents et armes Valorant selon votre budget. Découvrez une combinaison aléatoire à chaque partie !" />
+  <meta name="description"
+    content="Randomisez vos agents et armes Valorant selon votre budget. Découvrez une combinaison aléatoire à chaque partie !" />
   <title>VALORANT RANDOMIZER</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap"
+    rel="stylesheet">
   <link rel="stylesheet" href="style.css" />
 </head>
+
 <body>
 
   <!-- Background particles -->
@@ -23,10 +28,12 @@
         <span class="logo-text">VALORANT<span class="logo-sub">RANDOMIZER</span></span>
       </div>
       <nav class="tabs" role="tablist">
-        <button class="tab active" id="tab-agent" role="tab" aria-selected="true" aria-controls="section-agent" onclick="switchTab('agent')">
+        <button class="tab active" id="tab-agent" role="tab" aria-selected="true" aria-controls="section-agent"
+          onclick="switchTab('agent')">
           <span class="tab-icon">👤</span> AGENTS
         </button>
-        <button class="tab" id="tab-weapon" role="tab" aria-selected="false" aria-controls="section-weapon" onclick="switchTab('weapon')">
+        <button class="tab" id="tab-weapon" role="tab" aria-selected="false" aria-controls="section-weapon"
+          onclick="switchTab('weapon')">
           <span class="tab-icon">🔫</span> ARMES
         </button>
       </nav>
@@ -99,7 +106,8 @@
       <div class="budget-area">
         <label class="budget-label" for="budgetInput">💰 BUDGET (CRÉDITS)</label>
         <div class="budget-input-wrap">
-          <input type="number" id="budgetInput" class="budget-input" min="0" max="9000" value="3900" placeholder="ex: 3900" />
+          <input type="number" id="budgetInput" class="budget-input" min="0" max="9000" value="3900"
+            placeholder="ex: 3900" />
           <span class="budget-currency">CR</span>
         </div>
         <div class="budget-presets">
@@ -120,7 +128,8 @@
           <button class="chip" data-cat="Rifle" onclick="setWeaponCatFilter(this, 'Rifle')">Fusils</button>
           <button class="chip" data-cat="SMG" onclick="setWeaponCatFilter(this, 'SMG')">SMG</button>
           <button class="chip" data-cat="Shotgun" onclick="setWeaponCatFilter(this, 'Shotgun')">Shotguns</button>
-          <button class="chip" data-cat="Sniper Rifle" onclick="setWeaponCatFilter(this, 'Sniper Rifle')">Snipers</button>
+          <button class="chip" data-cat="Sniper Rifle"
+            onclick="setWeaponCatFilter(this, 'Sniper Rifle')">Snipers</button>
           <button class="chip" data-cat="Heavy" onclick="setWeaponCatFilter(this, 'Heavy')">Lourdes</button>
           <button class="chip" data-cat="Sidearm" onclick="setWeaponCatFilter(this, 'Sidearm')">Pistolets</button>
         </div>
@@ -139,7 +148,7 @@
                 <div class="weapon-category" id="weaponCategory"></div>
                 <h2 class="weapon-name" id="weaponName"></h2>
                 <div class="weapon-cost-badge" id="weaponCostBadge">
-                  <span class="cost-icon">💰</span>
+                  <span class="cost-icon">¤</span>
                   <span id="weaponCost"></span> CR
                 </div>
               </div>
@@ -173,4 +182,5 @@
 
   <script type="module" src="/main.js"></script>
 </body>
+
 </html>

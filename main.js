@@ -38,11 +38,15 @@ async function init() {
       _roleNameEn: roleEnMap[a.uuid] || (a.role ? a.role.displayName : '')
     }));
 
-    weapons = (weaponsData.data || []).filter(w => w.shopData && w.shopData.cost > 0).map(w => ({
-      ...w,
-      // Normalize category text: remove accents, lowercase → used for filter comparison
-      _catKey: normalizeCat(w.shopData.categoryText || w.shopData.category || '')
-    }));
+    weapons = (weaponsData.data || [])
+      .filter(w => w.shopData && w.shopData.cost > 0)
+      .map(w => ({
+        ...w,
+        _catKey: normalizeCat(
+          (w.category || '')
+            .replace('EEquippableCategory::', '')
+        )
+      }));
   } catch (err) {
     showToast('Erreur de chargement de l\'API. Vérifiez votre connexion.');
     console.error(err);
@@ -55,23 +59,58 @@ async function init() {
 
 // Normalize category text for comparison (strip accents, lowercase)
 function normalizeCat(str) {
-  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/\s+/g, '')
+    .toLowerCase();
 }
 
 // Category key mapping (what the chip data-cat sends → normalized match)
 const CAT_MAP = {
-  'Rifle':        'assault rifle',
-  'SMG':          'smg',
-  'Shotgun':      'shotgun',
-  'Sniper Rifle': 'sniper rifle',
-  'Heavy':        'heavy',
-  'Sidearm':      'sidearm',
+  Rifle: 'rifle',
+  SMG: 'smg',
+  Shotgun: 'shotgun',
+  'Sniper Rifle': 'sniperrifle',
+  Heavy: 'heavy',
+  Sidearm: 'sidearm',
 };
 
 // =============================================
 // TABS
 // =============================================
-window.switchTab = function(tab) {
+function updateWeaponCategoryAvailability() {
+  const budget = parseInt(document.getElementById('budgetInput').addEventListener('input', updateWeaponCategoryAvailability).value, 10);
+  if (isNaN(budget) || budget < 0) return;
+
+  const availableCats = new Set(
+    weapons
+      .filter(w => w.shopData.cost <= budget)
+      .map(w => w._catKey)
+  );
+
+  document.querySelectorAll('#weaponCatFilters .chip').forEach(chip => {
+    const cat = chip.dataset.cat;
+    if (cat === 'all') {
+      chip.disabled = false;
+      chip.classList.remove('disabled');
+      return;
+    }
+
+    const targetKey = normalizeCat(CAT_MAP[cat] || cat);
+    const isAvailable = [...availableCats].some(c => c.includes(targetKey));
+
+    chip.disabled = !isAvailable;
+    chip.classList.toggle('disabled', !isAvailable);
+
+    if (!isAvailable && chip.classList.contains('active')) {
+      chip.classList.remove('active');
+      currentWeaponCatFilter = 'all';
+      document.querySelector('#weaponCatFilters .chip[data-cat="all"]')?.classList.add('active');
+    }
+  });
+}
+window.switchTab = function (tab) {
   document.querySelectorAll('.tab').forEach(el => {
     el.classList.remove('active');
     el.setAttribute('aria-selected', 'false');
@@ -86,7 +125,7 @@ window.switchTab = function(tab) {
 // =============================================
 // ROLE FILTER (AGENTS)
 // =============================================
-window.setRoleFilter = function(el, role) {
+window.setRoleFilter = function (el, role) {
   document.querySelectorAll('#roleFilters .chip').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
   currentRoleFilter = role;
@@ -95,7 +134,7 @@ window.setRoleFilter = function(el, role) {
 // =============================================
 // WEAPON CATEGORY FILTER
 // =============================================
-window.setWeaponCatFilter = function(el, cat) {
+window.setWeaponCatFilter = function (el, cat) {
   document.querySelectorAll('#weaponCatFilters .chip').forEach(c => c.classList.remove('active'));
   el.classList.add('active');
   currentWeaponCatFilter = cat;
@@ -104,7 +143,7 @@ window.setWeaponCatFilter = function(el, cat) {
 // =============================================
 // RANDOMIZE AGENT
 // =============================================
-window.randomizeAgent = function() {
+window.randomizeAgent = function () {
   if (!agents.length) { showToast('Agents non chargés. Rechargez la page.'); return; }
 
   let pool = agents;
@@ -178,14 +217,14 @@ function displayAgent(agent) {
 // =============================================
 // RANDOMIZE WEAPON
 // =============================================
-window.setBudget = function(amount) {
-  document.getElementById('budgetInput').value = amount;
+window.setBudget = function (amount) {
+  document.getElementById('budgetInput').addEventListener('input', updateWeaponCategoryAvailability).value = amount;
 };
 
-window.randomizeWeapon = function() {
+window.randomizeWeapon = function () {
   if (!weapons.length) { showToast('Armes non chargées. Rechargez la page.'); return; }
 
-  const budget = parseInt(document.getElementById('budgetInput').value, 10);
+  const budget = parseInt(document.getElementById('budgetInput').addEventListener('input', updateWeaponCategoryAvailability).value, 10);
   if (isNaN(budget) || budget < 0) { showToast('Entrez un budget valide.'); return; }
 
   let pool = weapons.filter(w => w.shopData.cost <= budget);
@@ -231,8 +270,8 @@ function displayWeapon(weapon) {
 
   if (weapon.weaponStats) {
     const ws = weapon.weaponStats;
-    if (ws.fireRate)      stats.push({ label: 'CADENCE DE TIR', value: ws.fireRate.toFixed(1) + ' tr/s', pct: Math.min(ws.fireRate / 14 * 100, 100) });
-    if (ws.magazineSize)  stats.push({ label: 'CHARGEUR', value: ws.magazineSize, pct: Math.min(ws.magazineSize / 50 * 100, 100) });
+    if (ws.fireRate) stats.push({ label: 'CADENCE DE TIR', value: ws.fireRate.toFixed(1) + ' tr/s', pct: Math.min(ws.fireRate / 14 * 100, 100) });
+    if (ws.magazineSize) stats.push({ label: 'CHARGEUR', value: ws.magazineSize, pct: Math.min(ws.magazineSize / 50 * 100, 100) });
     if (ws.reloadTimeSeconds) stats.push({ label: 'RECHARGEMENT', value: ws.reloadTimeSeconds.toFixed(1) + 's', pct: Math.max(0, 100 - (ws.reloadTimeSeconds / 5 * 100)) });
     if (ws.equipTimeSeconds) stats.push({ label: 'DÉGAINAGE', value: ws.equipTimeSeconds.toFixed(1) + 's', pct: Math.max(0, 100 - (ws.equipTimeSeconds / 2 * 100)) });
     if (ws.wallPenetration) stats.push({ label: 'PÉNÉTRATION', value: formatPenetration(ws.wallPenetration), pct: penetrationPct(ws.wallPenetration) });
@@ -266,18 +305,18 @@ function displayWeapon(weapon) {
 function formatPenetration(p) {
   if (!p) return 'N/A';
   const key = p.toLowerCase();
-  if (key.includes('low'))   return 'Faible';
+  if (key.includes('low')) return 'Faible';
   if (key.includes('medium')) return 'Moyen';
-  if (key.includes('high'))  return 'Élevé';
+  if (key.includes('high')) return 'Élevé';
   return p;
 }
 
 function penetrationPct(p) {
   if (!p) return 0;
   const key = p.toLowerCase();
-  if (key.includes('low'))    return 33;
+  if (key.includes('low')) return 33;
   if (key.includes('medium')) return 66;
-  if (key.includes('high'))   return 100;
+  if (key.includes('high')) return 100;
   return 0;
 }
 
