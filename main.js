@@ -79,7 +79,7 @@ const CAT_MAP = {
   Rifle: 'rifle',
   SMG: 'smg',
   Shotgun: 'shotgun',
-  'Sniper Rifle': 'sniperrifle',
+  'Sniper Rifle': ['sniper', 'sniperrifle'],
   Heavy: 'heavy',
   Sidearm: 'sidearm',
 };
@@ -105,8 +105,10 @@ function updateWeaponCategoryAvailability() {
       return;
     }
 
-    const targetKey = normalizeCat(CAT_MAP[cat] || cat);
-    const isAvailable = [...availableCats].some(c => c.includes(targetKey));
+    const targetKeys = (CAT_MAP[cat] || [cat]).map(normalizeCat);
+    const isAvailable = [...availableCats].some(c =>
+      targetKeys.some(targetKey => c.includes(targetKey))
+    );
 
     chip.disabled = !isAvailable;
     chip.classList.toggle('disabled', !isAvailable);
@@ -252,8 +254,10 @@ window.randomizeWeapon = function () {
 
   if (currentWeaponCatFilter !== 'all') {
     // Match using normalized categoryText (e.g. 'Assault Rifle' → 'assault rifle')
-    const targetKey = normalizeCat(CAT_MAP[currentWeaponCatFilter] || currentWeaponCatFilter);
-    pool = pool.filter(w => w._catKey === targetKey);
+    const targetKeys = (CAT_MAP[currentWeaponCatFilter] || [currentWeaponCatFilter]).map(normalizeCat);
+    pool = pool.filter(w =>
+      targetKeys.some(targetKey => w._catKey.includes(targetKey))
+    );
   }
 
   if (!pool.length) {
