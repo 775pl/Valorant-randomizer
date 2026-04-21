@@ -143,9 +143,18 @@ window.setRoleFilter = function (el, role) {
 // WEAPON CATEGORY FILTER
 // =============================================
 window.setWeaponCatFilter = function (el, cat) {
-  if (el.disabled) return;
+  if (el.disabled) {
+    el.classList.remove('shake');
+    void el.offsetWidth; // reset animation
+    el.classList.add('shake');
 
-  document.querySelectorAll('#weaponCatFilters .chip').forEach(c => c.classList.remove('active'));
+    showToast('Budget trop faible pour cette catégorie');
+    return;
+  }
+
+  document.querySelectorAll('#weaponCatFilters .chip')
+    .forEach(c => c.classList.remove('active'));
+
   el.classList.add('active');
   currentWeaponCatFilter = cat;
 };
