@@ -1,186 +1,113 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="fr">
-
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <meta name="description"
-    content="Randomisez vos agents et armes Valorant selon votre budget. Découvrez une combinaison aléatoire à chaque partie !" />
-  <title>VALORANT RANDOMIZER</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@300;400;500;600&display=swap"
-    rel="stylesheet">
-  <link rel="stylesheet" href="style.css" />
+  <meta name="description" content="Composez un loadout Valorant aléatoire selon votre rôle, votre budget et votre style de partie." />
+  <meta name="theme-color" content="#090b10" />
+  <title>Protocol — Valorant Randomizer</title>
+  <link rel="icon" href="/favicon.svg" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/style.css" />
 </head>
-
 <body>
-
-  <!-- Background particles -->
-  <div class="bg-particles" id="bgParticles"></div>
-
-  <!-- Header -->
-  <header class="header">
-    <div class="header-inner">
-      <div class="logo">
-        <span class="logo-icon">⬡</span>
-        <span class="logo-text">VALORANT<span class="logo-sub">RANDOMIZER</span></span>
-      </div>
-      <nav class="tabs" role="tablist">
-        <button class="tab active" id="tab-agent" role="tab" aria-selected="true" aria-controls="section-agent"
-          onclick="switchTab('agent')">
-          <span class="tab-icon">👤</span> AGENTS
-        </button>
-        <button class="tab" id="tab-weapon" role="tab" aria-selected="false" aria-controls="section-weapon"
-          onclick="switchTab('weapon')">
-          <span class="tab-icon">🔫</span> ARMES
-        </button>
-      </nav>
+  <a class="skip-link" href="#main">Aller au contenu</a>
+  <div class="ambient" aria-hidden="true"><span></span><span></span><span></span></div>
+  <header class="topbar">
+    <a class="brand" href="#" aria-label="Protocol, accueil">
+      <span class="brand-mark" aria-hidden="true"><i></i><i></i></span>
+      <span><strong>PROTOCOL</strong><small>LOADOUT RANDOMIZER</small></span>
+    </a>
+    <nav class="main-nav" aria-label="Navigation principale">
+      <button class="nav-item is-active" data-view="loadout">Loadout</button>
+      <button class="nav-item" data-view="agents">Agents</button>
+      <button class="nav-item" data-view="weapons">Arsenal</button>
+    </nav>
+    <div class="header-actions">
+      <span class="api-status" id="apiStatus"><i></i><span>Connexion…</span></span>
+      <button class="icon-button history-trigger" id="historyTrigger" aria-label="Ouvrir l'historique" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7L3 8m0-5v5h5M12 7v5l3 2"/></svg><span class="history-count" id="historyCount">0</span>
+      </button>
     </div>
   </header>
 
-  <main class="main">
-
-    <!-- ===== AGENT SECTION ===== -->
-    <section id="section-agent" class="section active" aria-labelledby="tab-agent">
-      <div class="section-header">
-        <h1 class="section-title">AGENT ALÉATOIRE</h1>
-        <p class="section-subtitle">Découvrez quel agent vous jouerez ce round</p>
-      </div>
-
-      <!-- Filters -->
-      <div class="filters">
-        <span class="filter-label">FILTRER PAR RÔLE</span>
-        <div class="filter-chips" id="roleFilters">
-          <button class="chip active" data-role="all" onclick="setRoleFilter(this, 'all')">Tous</button>
-          <button class="chip" data-role="Duelist" onclick="setRoleFilter(this, 'Duelist')">Duelliste</button>
-          <button class="chip" data-role="Initiator" onclick="setRoleFilter(this, 'Initiator')">Initiateur</button>
-          <button class="chip" data-role="Controller" onclick="setRoleFilter(this, 'Controller')">Contrôleur</button>
-          <button class="chip" data-role="Sentinel" onclick="setRoleFilter(this, 'Sentinel')">Sentinelle</button>
-        </div>
-      </div>
-
-      <!-- Result Card -->
-      <div class="result-area" id="agentResultArea">
-        <div class="card-placeholder" id="agentPlaceholder">
-          <div class="placeholder-icon">?</div>
-          <p>Cliquez sur le bouton pour randomiser un agent</p>
-        </div>
-        <div class="agent-card hidden" id="agentCard">
-          <div class="agent-card-bg" id="agentCardBg"></div>
-          <div class="agent-card-content">
-            <div class="agent-portrait-wrap">
-              <img id="agentPortrait" src="" alt="Portrait Agent" class="agent-portrait" />
-              <div class="agent-glow" id="agentGlow"></div>
-            </div>
-            <div class="agent-info">
-              <div class="agent-role-badge" id="agentRoleBadge">
-                <img id="agentRoleIcon" src="" alt="Rôle" class="role-icon" />
-                <span id="agentRoleName"></span>
-              </div>
-              <h2 class="agent-name" id="agentName"></h2>
-              <p class="agent-description" id="agentDescription"></p>
-              <div class="agent-abilities" id="agentAbilities"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <button class="btn-randomize" id="btnRandomizeAgent" onclick="randomizeAgent()">
-        <span class="btn-inner">
-          <span class="btn-label">RANDOMISER</span>
-          <span class="btn-arrow">→</span>
-        </span>
-      </button>
+  <main id="main" class="page-shell">
+    <section class="hero">
+      <div class="eyebrow"><span>●</span> Générateur tactique</div>
+      <h1>LAISSEZ LE <em>PROTOCOLE</em><br />CHOISIR VOTRE PARTIE.</h1>
+      <p>Un agent. Une arme. Zéro hésitation. Ajustez les règles, verrouillez vos favoris et lancez le tirage.</p>
     </section>
 
-    <!-- ===== WEAPON SECTION ===== -->
-    <section id="section-weapon" class="section" aria-labelledby="tab-weapon">
-      <div class="section-header">
-        <h1 class="section-title">ARME ALÉATOIRE</h1>
-        <p class="section-subtitle">Entrez votre budget et découvrez l'arme idéale</p>
-      </div>
-
-      <!-- Budget Input -->
-      <div class="budget-area">
-        <label class="budget-label" for="budgetInput">💰 BUDGET (CRÉDITS)</label>
-        <div class="budget-input-wrap">
-          <input type="number" id="budgetInput" class="budget-input" min="0" max="9000" value="3900"
-            placeholder="ex: 3900" />
-          <span class="budget-currency">CR</span>
+    <section class="workspace" aria-label="Générateur de loadout">
+      <aside class="control-panel">
+        <div class="panel-heading">
+          <span class="step-number">01</span><div><p>PARAMÈTRES</p><h2>Règles du tirage</h2></div>
+          <button class="text-button" id="resetFilters">Réinitialiser</button>
         </div>
-        <div class="budget-presets">
-          <span class="preset-label">Presets :</span>
-          <button class="preset-btn" onclick="setBudget(800)" title="Eco">800</button>
-          <button class="preset-btn" onclick="setBudget(1600)" title="Force buy">1600</button>
-          <button class="preset-btn" onclick="setBudget(2900)" title="Demi-buy">2900</button>
-          <button class="preset-btn" onclick="setBudget(3900)" title="Full buy">3900</button>
-          <button class="preset-btn" onclick="setBudget(4700)" title="Max buy">4700</button>
-        </div>
-      </div>
-
-      <!-- Category filter -->
-      <div class="filters">
-        <span class="filter-label">FILTRER PAR CATÉGORIE</span>
-        <div class="filter-chips" id="weaponCatFilters">
-          <button class="chip active" data-cat="all" onclick="setWeaponCatFilter(this, 'all')">Toutes</button>
-          <button class="chip" data-cat="Rifle" onclick="setWeaponCatFilter(this, 'Rifle')">Fusils</button>
-          <button class="chip" data-cat="SMG" onclick="setWeaponCatFilter(this, 'SMG')">SMG</button>
-          <button class="chip" data-cat="Shotgun" onclick="setWeaponCatFilter(this, 'Shotgun')">Shotguns</button>
-          <button class="chip" data-cat="Sniper Rifle"
-            onclick="setWeaponCatFilter(this, 'Sniper Rifle')">Snipers</button>
-          <button class="chip" data-cat="Heavy" onclick="setWeaponCatFilter(this, 'Heavy')">Lourdes</button>
-          <button class="chip" data-cat="Sidearm" onclick="setWeaponCatFilter(this, 'Sidearm')">Pistolets</button>
-        </div>
-      </div>
-
-      <!-- Result -->
-      <div class="result-area" id="weaponResultArea">
-        <div class="card-placeholder" id="weaponPlaceholder">
-          <div class="placeholder-icon">?</div>
-          <p>Cliquez sur le bouton pour randomiser une arme</p>
-        </div>
-        <div class="weapon-card hidden" id="weaponCard">
-          <div class="weapon-card-inner">
-            <div class="weapon-header">
-              <div class="weapon-meta">
-                <div class="weapon-category" id="weaponCategory"></div>
-                <h2 class="weapon-name" id="weaponName"></h2>
-                <div class="weapon-cost-badge" id="weaponCostBadge">
-                  <span class="cost-icon">¤</span>
-                  <span id="weaponCost"></span> CR
-                </div>
-              </div>
-              <img id="weaponImage" src="" alt="Arme" class="weapon-image" />
-            </div>
-            <div class="weapon-stats" id="weaponStats"></div>
+        <div class="control-group agent-controls">
+          <div class="control-label"><label>Rôle de l'agent</label><span id="roleSelection">Tous</span></div>
+          <div class="segmented" id="roleFilters">
+            <button class="is-active" data-role="all" title="Tous les rôles">Tous</button><button data-role="Duelist" title="Duelliste">Duel</button><button data-role="Initiator" title="Initiateur">Init.</button><button data-role="Controller" title="Contrôleur">Ctrl.</button><button data-role="Sentinel" title="Sentinelle">Sent.</button>
           </div>
         </div>
+        <div class="control-group weapon-controls">
+          <div class="control-label"><label for="budgetRange">Budget maximum</label><output id="budgetOutput" for="budgetRange">3 900 CR</output></div>
+          <input id="budgetRange" class="range" type="range" min="0" max="9000" step="100" value="3900" />
+          <div class="range-scale"><span>0</span><span>4 500</span><span>9 000</span></div>
+          <div class="presets" id="budgetPresets">
+            <button data-budget="800">Éco <b>800</b></button><button data-budget="2000">Forcé <b>2 000</b></button><button class="is-active" data-budget="3900">Full buy <b>3 900</b></button><button data-budget="4700">Confort <b>4 700</b></button>
+          </div>
+        </div>
+        <div class="control-group weapon-controls">
+          <div class="control-label"><label>Catégorie d'arme</label><span id="categorySelection">Toutes</span></div>
+          <div class="chip-list" id="weaponFilters">
+            <button class="is-active" data-category="all">Toutes</button><button data-category="Rifles">Fusils</button><button data-category="SMGs">PM</button><button data-category="Shotguns">Pompes</button><button data-category="Sniper Rifles">Snipers</button><button data-category="Heavy Weapons">Lourdes</button><button data-category="Sidearms">Pistolets</button>
+          </div>
+        </div>
+        <label class="toggle-row"><span><strong>Éviter les doublons</strong><small>Ne répète pas le dernier résultat</small></span><input id="avoidRepeat" type="checkbox" checked /><i aria-hidden="true"></i></label>
+      </aside>
+
+      <div class="result-panel">
+        <div class="panel-heading result-heading"><span class="step-number">02</span><div><p>RÉSULTAT</p><h2>Votre prochain loadout</h2></div><span class="shortcut">ESPACE <kbd>↵</kbd></span></div>
+        <div class="empty-state" id="emptyState"><div class="scanner" aria-hidden="true"><span></span><i></i></div><h3>PRÊT POUR LE TIRAGE</h3><p>Configurez vos règles puis lancez le protocole.</p></div>
+        <div class="loadout-grid is-hidden" id="loadoutResult">
+          <article class="reveal-card agent-result" id="agentCard">
+            <div class="card-actions">
+              <button class="card-action" id="lockAgent" aria-label="Verrouiller l'agent" title="Verrouiller l'agent"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></button>
+              <button class="card-action" id="rerollAgent" aria-label="Relancer uniquement l'agent" title="Relancer l'agent"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7h-5V2M4 17h5v5M5.5 9A7 7 0 0 1 17 5l3 2M4 17l3 2a7 7 0 0 0 11.5-4"/></svg></button>
+            </div>
+            <div class="agent-art"><div class="agent-backdrop" id="agentBackdrop"></div><img id="agentImage" alt="" /></div>
+            <div class="card-copy"><div class="role-pill"><img id="roleIcon" alt="" /><span id="agentRole">Agent</span></div><h3 id="agentName">—</h3><p id="agentDescription"></p><div class="ability-list" id="abilityList"></div></div>
+          </article>
+          <article class="reveal-card weapon-result" id="weaponCard">
+            <div class="card-actions">
+              <button class="card-action" id="lockWeapon" aria-label="Verrouiller l'arme" title="Verrouiller l'arme"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></button>
+              <button class="card-action" id="rerollWeapon" aria-label="Relancer uniquement l'arme" title="Relancer l'arme"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7h-5V2M4 17h5v5M5.5 9A7 7 0 0 1 17 5l3 2M4 17l3 2a7 7 0 0 0 11.5-4"/></svg></button>
+            </div>
+            <div class="weapon-visual"><span class="weapon-index">// ARSENAL</span><img id="weaponImage" alt="" /></div>
+            <div class="card-copy weapon-copy"><div class="weapon-category" id="weaponCategory">Arme</div><h3 id="weaponName">—</h3><div class="price" id="weaponPrice">0 CR</div><div class="stat-grid" id="weaponStats"></div></div>
+          </article>
+        </div>
+        <div class="primary-actions">
+          <button class="primary-button" id="randomizeButton"><span>LANCER LE PROTOCOLE</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 3h5v5M4 20 21 3M21 16v5h-5M15 15l6 6M4 4l5 5"/></svg></button>
+          <button class="secondary-button" id="copyButton" disabled aria-label="Copier le loadout" title="Copier le loadout"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/></svg></button>
+          <button class="secondary-button" id="favoriteButton" disabled aria-label="Ajouter aux favoris" title="Ajouter aux favoris"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1.1-1.1a5.5 5.5 0 0 0-7.8 7.8l1.1 1.1L12 21l7.8-7.5 1.1-1.1a5.5 5.5 0 0 0-.1-7.8Z"/></svg></button>
+        </div>
       </div>
-
-      <button class="btn-randomize" id="btnRandomizeWeapon" onclick="randomizeWeapon()">
-        <span class="btn-inner">
-          <span class="btn-label">RANDOMISER</span>
-          <span class="btn-arrow">→</span>
-        </span>
-      </button>
     </section>
-
+    <p class="footnote">Données fournies par Valorant-API.com · Projet non affilié à Riot Games.</p>
   </main>
 
-  <!-- Loading overlay -->
-  <div class="loading-overlay hidden" id="loadingOverlay">
-    <div class="loading-spinner">
-      <div class="spinner-ring"></div>
-      <span class="loading-text">CHARGEMENT...</span>
-    </div>
-  </div>
-
-  <!-- Toast notification -->
-  <div class="toast hidden" id="toast"></div>
-
+  <div class="drawer-scrim" id="drawerScrim"></div>
+  <aside class="history-drawer" id="historyDrawer" aria-hidden="true" aria-label="Historique des tirages">
+    <div class="drawer-header"><div><span>ARCHIVES</span><h2>Historique</h2></div><button class="icon-button" id="closeHistory" aria-label="Fermer"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button></div>
+    <div class="drawer-tabs"><button class="is-active" data-history-tab="recent">Récents</button><button data-history-tab="favorites">Favoris</button></div>
+    <div class="history-list" id="historyList"></div><button class="clear-history" id="clearHistory">Effacer l'historique</button>
+  </aside>
+  <div class="loading-overlay" id="loadingOverlay"><div class="loader-mark"><i></i><i></i></div><p>INITIALISATION DU PROTOCOLE</p></div>
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
   <script type="module" src="/main.js"></script>
 </body>
-
 </html>

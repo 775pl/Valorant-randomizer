@@ -1,433 +1,303 @@
-// =============================================
-// VALORANT RANDOMIZER - main.js
-// API: https://valorant-api.com
-// =============================================
+const API = 'https://valorant-api.com/v1';
+const CACHE_KEY = 'protocol-data-v2';
+const HISTORY_KEY = 'protocol-history-v2';
+const FAVORITES_KEY = 'protocol-favorites-v2';
 
-const API_BASE = 'https://valorant-api.com/v1';
+const state = {
+  agents: [], weapons: [], role: 'all', category: 'all', budget: 3900,
+  view: 'loadout', current: { agent: null, weapon: null },
+  locked: { agent: false, weapon: false },
+  history: readStorage(HISTORY_KEY, []), favorites: readStorage(FAVORITES_KEY, []), historyTab: 'recent'
+};
 
-// State
-let agents = [];
-let weapons = [];
-let currentRoleFilter = 'all';
-let currentWeaponCatFilter = 'all';
+const $ = (selector) => document.querySelector(selector);
+const $$ = (selector) => [...document.querySelectorAll(selector)];
+const els = {
+  loading: $('#loadingOverlay'), status: $('#apiStatus'), randomize: $('#randomizeButton'), empty: $('#emptyState'),
+  result: $('#loadoutResult'), budget: $('#budgetRange'), budgetOutput: $('#budgetOutput'), roleSelection: $('#roleSelection'),
+  categorySelection: $('#categorySelection'), copy: $('#copyButton'), favorite: $('#favoriteButton'), historyList: $('#historyList'),
+  historyCount: $('#historyCount'), drawer: $('#historyDrawer'), scrim: $('#drawerScrim'), toast: $('#toast')
+};
 
-// =============================================
-// INIT
-// =============================================
+function readStorage(key, fallback) {
+  try { return JSON.parse(localStorage.getItem(key)) ?? fallback; } catch { return fallback; }
+}
+
+function writeStorage(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* Private mode or quota: the app remains usable. */ }
+}
+
 async function init() {
-  showLoading(true);
+  bindEvents();
+  updateHistoryUI();
+  setBudget(3900);
   try {
-    const [agentsRes, weaponsRes, agentsEnRes] = await Promise.all([
-      fetch(`${API_BASE}/agents?isPlayableCharacter=true&language=fr-FR`),
-      fetch(`${API_BASE}/weapons?language=fr-FR`),
-      fetch(`${API_BASE}/agents?isPlayableCharacter=true&language=en-US`)
+    const [frAgents, enAgents, frWeapons] = await Promise.all([
+      getJson(`${API}/agents?isPlayableCharacter=true&language=fr-FR`),
+      getJson(`${API}/agents?isPlayableCharacter=true&language=en-US`),
+      getJson(`${API}/weapons?language=fr-FR`)
     ]);
-    const agentsData = await agentsRes.json();
-    const weaponsData = await weaponsRes.json();
-    const agentsEnData = await agentsEnRes.json();
-
-    const roleEnMap = {};
-    for (const a of (agentsEnData.data || [])) {
-      if (a.role) roleEnMap[a.uuid] = a.role.displayName;
+    const englishRoles = Object.fromEntries(enAgents.data.map(agent => [agent.uuid, agent.role?.displayName || '']));
+    state.agents = frAgents.data.map(agent => compactAgent(agent, englishRoles[agent.uuid]));
+    state.weapons = frWeapons.data.filter(weapon => weapon.shopData?.cost > 0).map(compactWeapon);
+    writeStorage(CACHE_KEY, { agents: state.agents, weapons: state.weapons, cachedAt: Date.now() });
+    setStatus('is-online', 'Données à jour');
+  } catch (error) {
+    const cache = readStorage(CACHE_KEY, null);
+    if (cache?.agents?.length && cache?.weapons?.length) {
+      state.agents = cache.agents; state.weapons = cache.weapons;
+      setStatus('is-cached', 'Mode hors-ligne');
+      toast('Connexion indisponible — données sauvegardées utilisées');
+    } else {
+      setStatus('is-error', 'Hors connexion');
+      toast('Impossible de charger les données. Vérifiez votre connexion.');
     }
-
-    agents = (agentsData.data || []).map(a => ({
-      ...a,
-      _roleNameEn: roleEnMap[a.uuid] || (a.role ? a.role.displayName : '')
-    }));
-
-    weapons = (weaponsData.data || [])
-      .filter(w => w.shopData && w.shopData.cost > 0)
-      .map(w => ({
-        ...w,
-        _catKey: normalizeCat(
-          (w.category || '').replace('EEquippableCategory::', '')
-        )
-      }));
-  } catch (err) {
-    showToast('Erreur de chargement de l\'API. Vérifiez votre connexion.');
-    console.error(err);
+    console.error(error);
   } finally {
-    showLoading(false);
+    updateCategoryAvailability();
+    els.randomize.disabled = !state.agents.length || !state.weapons.length;
+    setTimeout(() => els.loading.classList.add('is-hidden'), 280);
   }
-
-  document
-    .getElementById('budgetInput')
-    .addEventListener('input', updateWeaponCategoryAvailability);
-
-  updateWeaponCategoryAvailability();
-  initParticles();
 }
 
-window.setBudget = function (amount) {
-  const input = document.getElementById('budgetInput');
-  input.value = amount;
-  updateWeaponCategoryAvailability();
-};
-
-// Normalize category text for comparison (strip accents, lowercase)
-function normalizeCat(str) {
-  return str
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s+/g, '')
-    .toLowerCase();
+async function getJson(url) {
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`API ${response.status}`);
+  return response.json();
 }
 
-// Category key mapping (what the chip data-cat sends → normalized match)
-const CAT_MAP = {
-  Rifle: 'rifle',
-  SMG: 'smg',
-  Shotgun: 'shotgun',
-  'Sniper Rifle': ['sniper', 'sniperrifle'],
-  Heavy: 'heavy',
-  Sidearm: 'sidearm',
-};
+function compactAgent(agent, englishRole) {
+  return {
+    id: agent.uuid, name: agent.displayName, description: agent.description || '', image: agent.fullPortraitV2 || agent.fullPortrait || agent.bustPortrait || agent.displayIcon,
+    icon: agent.displayIcon, background: agent.background || '', role: agent.role?.displayName || 'Agent', roleKey: englishRole || '', roleIcon: agent.role?.displayIcon || '',
+    abilities: (agent.abilities || []).filter(a => a.displayName).slice(0, 4).map(a => ({ name: a.displayName, icon: a.displayIcon || '' }))
+  };
+}
 
-// =============================================
-// TABS
-// =============================================
-function updateWeaponCategoryAvailability() {
-  const budget = parseInt(document.getElementById('budgetInput').value, 10);
-  if (isNaN(budget) || budget < 0) return;
-
-  const availableCats = new Set(
-    weapons
-      .filter(w => w.shopData.cost <= budget)
-      .map(w => w._catKey)
-  );
-
-  document.querySelectorAll('#weaponCatFilters .chip').forEach(chip => {
-    const cat = chip.dataset.cat;
-    if (cat === 'all') {
-      chip.disabled = false;
-      chip.classList.remove('disabled');
-      return;
+function compactWeapon(weapon) {
+  const rawCategory = (weapon.category || '').replace('EEquippableCategory::', '');
+  const categories = { Rifle: 'Rifles', SMG: 'SMGs', Shotgun: 'Shotguns', Sniper: 'Sniper Rifles', Heavy: 'Heavy Weapons', Sidearm: 'Sidearms' };
+  const stats = weapon.weaponStats || {};
+  return {
+    id: weapon.uuid, name: weapon.displayName, image: weapon.displayIcon, price: weapon.shopData.cost,
+    category: categories[rawCategory] || weapon.shopData.category || rawCategory,
+    categoryLabel: weapon.shopData.categoryText || weapon.shopData.category || rawCategory,
+    stats: {
+      fireRate: stats.fireRate || 0, magazine: stats.magazineSize || 0, reload: stats.reloadTimeSeconds || 0,
+      penetration: formatPenetration(stats.wallPenetration), head: Math.round(stats.damageRanges?.[0]?.headDamage || 0), body: Math.round(stats.damageRanges?.[0]?.bodyDamage || 0)
     }
+  };
+}
 
-    const targetKey = normalizeCat(CAT_MAP[cat] || cat);
-    const isAvailable = [...availableCats].some(c => c.includes(targetKey));
+function formatPenetration(value = '') {
+  if (value.includes('High')) return 'Élevée';
+  if (value.includes('Medium')) return 'Moyenne';
+  if (value.includes('Low')) return 'Faible';
+  return '—';
+}
 
-    chip.disabled = !isAvailable;
-    chip.classList.toggle('disabled', !isAvailable);
+function bindEvents() {
+  $('#roleFilters').addEventListener('click', event => {
+    const button = event.target.closest('button'); if (!button) return;
+    state.role = button.dataset.role; setActive(button, '#roleFilters button');
+    els.roleSelection.textContent = button.title === 'Tous les rôles' ? 'Tous' : button.title;
+  });
+  $('#weaponFilters').addEventListener('click', event => {
+    const button = event.target.closest('button'); if (!button || button.disabled) return;
+    state.category = button.dataset.category; setActive(button, '#weaponFilters button'); els.categorySelection.textContent = button.textContent;
+  });
+  els.budget.addEventListener('input', () => setBudget(Number(els.budget.value)));
+  $('#budgetPresets').addEventListener('click', event => { const button = event.target.closest('button'); if (button) setBudget(Number(button.dataset.budget)); });
+  $('#resetFilters').addEventListener('click', resetFilters);
+  els.randomize.addEventListener('click', randomize);
+  $('#rerollAgent').addEventListener('click', () => randomizePart('agent'));
+  $('#rerollWeapon').addEventListener('click', () => randomizePart('weapon'));
+  $('#lockAgent').addEventListener('click', () => toggleLock('agent'));
+  $('#lockWeapon').addEventListener('click', () => toggleLock('weapon'));
+  els.copy.addEventListener('click', copyLoadout);
+  els.favorite.addEventListener('click', toggleCurrentFavorite);
+  $$('.nav-item').forEach(button => button.addEventListener('click', () => setView(button.dataset.view, button)));
+  $('#historyTrigger').addEventListener('click', () => openDrawer(true));
+  $('#closeHistory').addEventListener('click', () => openDrawer(false));
+  els.scrim.addEventListener('click', () => openDrawer(false));
+  $$('.drawer-tabs button').forEach(button => button.addEventListener('click', () => { state.historyTab = button.dataset.historyTab; setActive(button, '.drawer-tabs button'); renderHistory(); }));
+  $('#clearHistory').addEventListener('click', () => { state.history = []; writeStorage(HISTORY_KEY, []); updateHistoryUI(); toast('Historique effacé'); });
+  document.addEventListener('keydown', event => {
+    if (event.key === 'Escape') openDrawer(false);
+    if (event.code === 'Space' && !/INPUT|BUTTON|TEXTAREA|SELECT/.test(document.activeElement.tagName) && !els.randomize.disabled) { event.preventDefault(); randomize(); }
+  });
+}
 
-    if (!isAvailable && chip.classList.contains('active')) {
-      chip.classList.remove('active');
-      currentWeaponCatFilter = 'all';
-      document.querySelector('#weaponCatFilters .chip[data-cat="all"]')?.classList.add('active');
+function setActive(button, selector) { $$(selector).forEach(item => item.classList.toggle('is-active', item === button)); }
+
+function setBudget(value) {
+  state.budget = Math.max(0, Math.min(9000, value));
+  els.budget.value = state.budget; els.budgetOutput.textContent = `${state.budget.toLocaleString('fr-FR')} CR`;
+  els.budget.style.setProperty('--range-fill', `${state.budget / 90}%`);
+  $$('#budgetPresets button').forEach(button => button.classList.toggle('is-active', Number(button.dataset.budget) === state.budget));
+  updateCategoryAvailability();
+}
+
+function updateCategoryAvailability() {
+  const available = new Set(state.weapons.filter(w => w.price <= state.budget).map(w => w.category));
+  $$('#weaponFilters button').forEach(button => {
+    button.disabled = button.dataset.category !== 'all' && !available.has(button.dataset.category);
+    if (button.disabled && button.classList.contains('is-active')) {
+      state.category = 'all'; setActive($('#weaponFilters [data-category="all"]'), '#weaponFilters button'); els.categorySelection.textContent = 'Toutes';
     }
   });
 }
-window.switchTab = function (tab) {
-  document.querySelectorAll('.tab').forEach(el => {
-    el.classList.remove('active');
-    el.setAttribute('aria-selected', 'false');
-  });
-  document.querySelectorAll('.section').forEach(el => el.classList.remove('active'));
 
-  document.getElementById(`tab-${tab}`).classList.add('active');
-  document.getElementById(`tab-${tab}`).setAttribute('aria-selected', 'true');
-  document.getElementById(`section-${tab}`).classList.add('active');
-};
+function resetFilters() {
+  state.role = 'all'; state.category = 'all';
+  setActive($('#roleFilters [data-role="all"]'), '#roleFilters button'); setActive($('#weaponFilters [data-category="all"]'), '#weaponFilters button');
+  els.roleSelection.textContent = 'Tous'; els.categorySelection.textContent = 'Toutes'; $('#avoidRepeat').checked = true; setBudget(3900); toast('Paramètres réinitialisés');
+}
 
-// =============================================
-// ROLE FILTER (AGENTS)
-// =============================================
-window.setRoleFilter = function (el, role) {
-  document.querySelectorAll('#roleFilters .chip').forEach(c => c.classList.remove('active'));
-  el.classList.add('active');
-  currentRoleFilter = role;
-};
+function setView(view, button) {
+  state.view = view; document.body.dataset.view = view; setActive(button, '.nav-item');
+  const labels = { loadout: 'LANCER LE PROTOCOLE', agents: 'TIRER UN AGENT', weapons: 'TIRER UNE ARME' };
+  els.randomize.querySelector('span').textContent = labels[view];
+  state.current = { agent: null, weapon: null };
+  state.locked = { agent: false, weapon: false };
+  $$('.card-action').forEach(action => action.classList.remove('is-active'));
+  els.empty.classList.remove('is-hidden'); els.result.classList.add('is-hidden');
+  els.copy.disabled = true; els.favorite.disabled = true;
+}
 
-// =============================================
-// WEAPON CATEGORY FILTER
-// =============================================
-window.setWeaponCatFilter = function (el, cat) {
-  if (el.disabled) {
-    el.classList.remove('shake');
-    void el.offsetWidth; // reset animation
-    el.classList.add('shake');
+function getAgentPool() {
+  let pool = state.role === 'all' ? state.agents : state.agents.filter(agent => agent.roleKey === state.role);
+  if ($('#avoidRepeat').checked && pool.length > 1 && state.current.agent) pool = pool.filter(agent => agent.id !== state.current.agent.id);
+  return pool;
+}
 
-    showToast('Budget trop faible pour cette catégorie');
-    return;
-  }
+function getWeaponPool() {
+  let pool = state.weapons.filter(weapon => weapon.price <= state.budget && (state.category === 'all' || weapon.category === state.category));
+  if ($('#avoidRepeat').checked && pool.length > 1 && state.current.weapon) pool = pool.filter(weapon => weapon.id !== state.current.weapon.id);
+  return pool;
+}
 
-  document.querySelectorAll('#weaponCatFilters .chip')
-    .forEach(c => c.classList.remove('active'));
+function pick(pool) { return pool[Math.floor(Math.random() * pool.length)] || null; }
 
-  el.classList.add('active');
-  currentWeaponCatFilter = cat;
-};
+function randomize() {
+  if (state.view !== 'weapons' && !state.locked.agent) state.current.agent = pick(getAgentPool());
+  if (state.view !== 'agents' && !state.locked.weapon) state.current.weapon = pick(getWeaponPool());
+  if ((state.view !== 'weapons' && !state.current.agent) || (state.view !== 'agents' && !state.current.weapon)) { toast('Aucun résultat ne correspond à ces paramètres'); return; }
+  animateResult(); renderCurrent(); saveResult(); burst();
+}
 
-// =============================================
-// RANDOMIZE AGENT
-// =============================================
-window.randomizeAgent = function () {
-  if (!agents.length) { showToast('Agents non chargés. Rechargez la page.'); return; }
+function randomizePart(part) {
+  const result = part === 'agent' ? pick(getAgentPool()) : pick(getWeaponPool());
+  if (!result) { toast('Aucun résultat ne correspond à ces paramètres'); return; }
+  state.current[part] = result; renderCurrent(); saveResult();
+}
 
-  let pool = agents;
-  if (currentRoleFilter !== 'all') {
-    // Use the English role name stored during init for reliable comparison
-    pool = agents.filter(a => a._roleNameEn && a._roleNameEn.toLowerCase() === currentRoleFilter.toLowerCase());
-  }
+function animateResult() {
+  els.randomize.disabled = true; els.randomize.querySelector('span').textContent = 'SÉLECTION EN COURS…';
+  setTimeout(() => { els.randomize.disabled = false; const labels = { loadout: 'RELANCER LE PROTOCOLE', agents: 'RELANCER UN AGENT', weapons: 'RELANCER UNE ARME' }; els.randomize.querySelector('span').textContent = labels[state.view]; }, 420);
+}
 
-  if (!pool.length) { showToast('Aucun agent trouvé pour ce rôle.'); return; }
+function renderCurrent() {
+  els.empty.classList.add('is-hidden'); els.result.classList.remove('is-hidden');
+  if (state.current.agent) renderAgent(state.current.agent);
+  if (state.current.weapon) renderWeapon(state.current.weapon);
+  els.copy.disabled = false; els.favorite.disabled = false; updateFavoriteButton();
+  $('#agentCard').classList.toggle('is-hidden', state.view === 'weapons'); $('#weaponCard').classList.toggle('is-hidden', state.view === 'agents');
+}
 
-  const agent = pool[Math.floor(Math.random() * pool.length)];
-  displayAgent(agent);
-  triggerConfetti();
-};
-
-function displayAgent(agent) {
-  const card = document.getElementById('agentCard');
-  const placeholder = document.getElementById('agentPlaceholder');
-
-  // Hide placeholder
-  placeholder.classList.add('hidden');
-
-  // Rebuild card with animation
-  card.classList.remove('hidden');
-  card.style.animation = 'none';
-  void card.offsetWidth; // reflow
-  card.style.animation = '';
-
-  // Background
-  const bg = document.getElementById('agentCardBg');
-  bg.style.backgroundImage = `url('${agent.background || agent.bustPortrait || ''}')`;
-
-  // Portrait
-  document.getElementById('agentPortrait').src = agent.bustPortrait || agent.displayIcon;
-  document.getElementById('agentPortrait').alt = agent.displayName;
-
-  // Role
-  const roleIcon = document.getElementById('agentRoleIcon');
-  const roleName = document.getElementById('agentRoleName');
-  if (agent.role) {
-    roleIcon.src = agent.role.displayIcon;
-    roleName.textContent = agent.role.displayName.toUpperCase();
-  }
-
-  // Glow color from agent
-  const glowEl = document.getElementById('agentGlow');
-  glowEl.style.background = `linear-gradient(to top, var(--bg-2), transparent)`;
-
-  // Name & Description
-  document.getElementById('agentName').textContent = agent.displayName.toUpperCase();
-  document.getElementById('agentDescription').textContent = agent.description || '';
-
-  // Abilities
-  const abilitiesEl = document.getElementById('agentAbilities');
-  abilitiesEl.innerHTML = '';
-  const keyLabels = ['Q', 'E', 'X', 'C'];
-  (agent.abilities || []).slice(0, 4).forEach((ability, i) => {
-    if (!ability.displayName) return;
-    const div = document.createElement('div');
-    div.className = 'ability-item';
-    div.title = ability.description || ability.displayName;
-    div.innerHTML = `
-      ${ability.displayIcon ? `<img src="${ability.displayIcon}" alt="${ability.displayName}" class="ability-icon" />` : ''}
-      <span class="ability-key">${keyLabels[i] || '?'}</span>
-      <span>${ability.displayName}</span>
-    `;
-    abilitiesEl.appendChild(div);
+function renderAgent(agent) {
+  $('#agentBackdrop').style.backgroundImage = `url("${agent.background || agent.image}")`;
+  setImage($('#agentImage'), agent.image, agent.name); setImage($('#roleIcon'), agent.roleIcon, agent.role);
+  $('#agentRole').textContent = agent.role; $('#agentName').textContent = agent.name.toUpperCase(); $('#agentDescription').textContent = agent.description;
+  const list = $('#abilityList'); list.replaceChildren();
+  agent.abilities.forEach((ability, index) => {
+    const item = document.createElement('div'); item.className = 'ability'; item.title = ability.name;
+    const image = document.createElement('img'); image.src = ability.icon; image.alt = '';
+    const key = document.createElement('span'); key.textContent = ['C', 'Q', 'E', 'X'][index] || '•'; item.append(image, key); list.append(item);
   });
 }
 
-// =============================================
-// RANDOMIZE WEAPON
-// =============================================
-window.setBudget = function (amount) {
-  const input = document.getElementById('budgetInput');
-  input.value = amount;
-  updateWeaponCategoryAvailability();
-};
+function renderWeapon(weapon) {
+  setImage($('#weaponImage'), weapon.image, weapon.name); $('#weaponCategory').textContent = weapon.categoryLabel;
+  $('#weaponName').textContent = weapon.name.toUpperCase(); $('#weaponPrice').textContent = `${weapon.price.toLocaleString('fr-FR')} CR`;
+  const values = [
+    ['Cadence', weapon.stats.fireRate ? `${weapon.stats.fireRate.toFixed(1)} /s` : '—'], ['Chargeur', weapon.stats.magazine || '—'],
+    ['Rechargement', weapon.stats.reload ? `${weapon.stats.reload.toFixed(1)} s` : '—'], ['Pénétration', weapon.stats.penetration],
+    ['Dégâts tête', weapon.stats.head || '—'], ['Dégâts corps', weapon.stats.body || '—']
+  ];
+  const grid = $('#weaponStats'); grid.replaceChildren();
+  values.forEach(([label, value]) => { const item = document.createElement('div'); item.className = 'stat'; const small = document.createElement('small'); small.textContent = label; const bold = document.createElement('b'); bold.textContent = value; item.append(small, bold); grid.append(item); });
+}
 
-window.randomizeWeapon = function () {
-  if (!weapons.length) { showToast('Armes non chargées. Rechargez la page.'); return; }
+function setImage(element, src, alt) { element.src = src || ''; element.alt = alt || ''; }
 
-  const budget = parseInt(document.getElementById('budgetInput').value, 10);
-  if (isNaN(budget) || budget < 0) { showToast('Entrez un budget valide.'); return; }
+function toggleLock(part) {
+  state.locked[part] = !state.locked[part]; const button = $(`#lock${part[0].toUpperCase()}${part.slice(1)}`); button.classList.toggle('is-active', state.locked[part]);
+  button.setAttribute('aria-label', `${state.locked[part] ? 'Déverrouiller' : 'Verrouiller'} ${part === 'agent' ? "l'agent" : "l'arme"}`); toast(`${part === 'agent' ? 'Agent' : 'Arme'} ${state.locked[part] ? 'verrouillé' : 'déverrouillé'}`);
+}
 
-  let pool = weapons.filter(w => w.shopData.cost <= budget);
+function resultId() { return `${state.current.agent?.id || 'none'}-${state.current.weapon?.id || 'none'}`; }
 
-  if (currentWeaponCatFilter !== 'all') {
-    // Match using normalized categoryText (e.g. 'Assault Rifle' → 'assault rifle')
-    const targetKey = normalizeCat(CAT_MAP[currentWeaponCatFilter] || currentWeaponCatFilter);
-    pool = pool.filter(w => w._catKey === targetKey);
+function saveResult() {
+  const record = {
+    id: `${Date.now()}-${resultId()}`, comboId: resultId(), time: Date.now(), view: state.view,
+    agent: state.current.agent ? { id: state.current.agent.id, name: state.current.agent.name, image: state.current.agent.icon, role: state.current.agent.role } : null,
+    weapon: state.current.weapon ? { id: state.current.weapon.id, name: state.current.weapon.name, image: state.current.weapon.image, price: state.current.weapon.price } : null
+  };
+  state.history.unshift(record); state.history = state.history.slice(0, 20); writeStorage(HISTORY_KEY, state.history); updateHistoryUI();
+}
+
+async function copyLoadout() {
+  const parts = []; if (state.current.agent) parts.push(`${state.current.agent.name} (${state.current.agent.role})`); if (state.current.weapon) parts.push(`${state.current.weapon.name} — ${state.current.weapon.price} CR`);
+  try { await navigator.clipboard.writeText(`Mon loadout Protocol : ${parts.join(' + ')}`); toast('Loadout copié dans le presse-papiers'); } catch { toast('Copie indisponible dans ce navigateur'); }
+}
+
+function toggleCurrentFavorite() {
+  const id = resultId(); const index = state.favorites.findIndex(item => item.comboId === id);
+  if (index >= 0) { state.favorites.splice(index, 1); toast('Retiré des favoris'); }
+  else {
+    state.favorites.unshift({ comboId: id, time: Date.now(), agent: state.current.agent ? { id: state.current.agent.id, name: state.current.agent.name, image: state.current.agent.icon, role: state.current.agent.role } : null, weapon: state.current.weapon ? { id: state.current.weapon.id, name: state.current.weapon.name, image: state.current.weapon.image, price: state.current.weapon.price } : null }); toast('Ajouté aux favoris');
   }
+  writeStorage(FAVORITES_KEY, state.favorites); updateFavoriteButton(); renderHistory();
+}
 
-  if (!pool.length) {
-    showToast(`Aucune arme disponible pour ${budget} CR dans cette catégorie.`);
-    return;
-  }
+function updateFavoriteButton() { els.favorite.classList.toggle('is-active', state.favorites.some(item => item.comboId === resultId())); }
 
-  const weapon = pool[Math.floor(Math.random() * pool.length)];
-  displayWeapon(weapon);
-  triggerConfetti();
-};
+function openDrawer(open) {
+  els.drawer.classList.toggle('is-open', open); els.scrim.classList.toggle('is-open', open); els.drawer.setAttribute('aria-hidden', String(!open)); $('#historyTrigger').setAttribute('aria-expanded', String(open));
+  if (open) renderHistory();
+}
 
-function displayWeapon(weapon) {
-  const card = document.getElementById('weaponCard');
-  const placeholder = document.getElementById('weaponPlaceholder');
+function updateHistoryUI() { els.historyCount.textContent = Math.min(state.history.length, 99); renderHistory(); }
 
-  placeholder.classList.add('hidden');
-
-  card.classList.remove('hidden');
-  card.style.animation = 'none';
-  void card.offsetWidth;
-  card.style.animation = '';
-
-  document.getElementById('weaponCategory').textContent = weapon.shopData.categoryText || weapon.shopData.category || '';
-  document.getElementById('weaponName').textContent = weapon.displayName.toUpperCase();
-  document.getElementById('weaponCost').textContent = weapon.shopData.cost.toLocaleString('fr-FR');
-  document.getElementById('weaponImage').src = weapon.displayIcon;
-  document.getElementById('weaponImage').alt = weapon.displayName;
-
-  // Stats
-  const statsEl = document.getElementById('weaponStats');
-  statsEl.innerHTML = '';
-
-  const stats = [];
-
-  if (weapon.weaponStats) {
-    const ws = weapon.weaponStats;
-    if (ws.fireRate) stats.push({ label: 'CADENCE DE TIR', value: ws.fireRate.toFixed(1) + ' tr/s', pct: Math.min(ws.fireRate / 14 * 100, 100) });
-    if (ws.magazineSize) stats.push({ label: 'CHARGEUR', value: ws.magazineSize, pct: Math.min(ws.magazineSize / 50 * 100, 100) });
-    if (ws.reloadTimeSeconds) stats.push({ label: 'RECHARGEMENT', value: ws.reloadTimeSeconds.toFixed(1) + 's', pct: Math.max(0, 100 - (ws.reloadTimeSeconds / 5 * 100)) });
-    if (ws.equipTimeSeconds) stats.push({ label: 'DÉGAINAGE', value: ws.equipTimeSeconds.toFixed(1) + 's', pct: Math.max(0, 100 - (ws.equipTimeSeconds / 2 * 100)) });
-    if (ws.wallPenetration) stats.push({ label: 'PÉNÉTRATION', value: formatPenetration(ws.wallPenetration), pct: penetrationPct(ws.wallPenetration) });
-
-    // Damage
-    if (ws.damageRanges && ws.damageRanges.length > 0) {
-      const dr = ws.damageRanges[0];
-      if (dr.headDamage) stats.push({ label: 'DÉGÂTS TÊTE', value: Math.round(dr.headDamage), pct: Math.min(dr.headDamage / 250 * 100, 100) });
-      if (dr.bodyDamage) stats.push({ label: 'DÉGÂTS CORPS', value: dr.bodyDamage, pct: Math.min(dr.bodyDamage / 160 * 100, 100) });
-    }
-  }
-
-  stats.forEach(s => {
-    const div = document.createElement('div');
-    div.className = 'stat-item';
-    div.innerHTML = `
-      <div class="stat-label">${s.label}</div>
-      <div class="stat-value">${s.value}</div>
-      <div class="stat-bar-wrap"><div class="stat-bar" style="width: 0%"></div></div>
-    `;
-    statsEl.appendChild(div);
-    // Animate bar after mount
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        div.querySelector('.stat-bar').style.width = `${s.pct}%`;
-      });
-    });
+function renderHistory() {
+  const items = state.historyTab === 'favorites' ? state.favorites : state.history; els.historyList.replaceChildren();
+  if (!items.length) { const empty = document.createElement('p'); empty.className = 'history-empty'; empty.textContent = state.historyTab === 'favorites' ? 'Aucun loadout favori pour le moment.' : 'Vos prochains tirages apparaîtront ici.'; els.historyList.append(empty); return; }
+  items.forEach(record => {
+    const row = document.createElement('article'); row.className = 'history-item';
+    const thumb = document.createElement('img'); thumb.className = 'history-thumb'; thumb.src = record.agent?.image || record.weapon?.image || ''; thumb.alt = '';
+    const copy = document.createElement('div'); const title = document.createElement('strong'); title.textContent = [record.agent?.name, record.weapon?.name].filter(Boolean).join(' + '); const meta = document.createElement('small'); meta.textContent = record.agent?.role || `${record.weapon?.price?.toLocaleString('fr-FR')} CR`; copy.append(title, meta);
+    const favorite = document.createElement('button'); favorite.type = 'button'; favorite.textContent = '♥'; favorite.title = 'Favori'; favorite.classList.toggle('is-active', state.favorites.some(item => item.comboId === record.comboId)); favorite.addEventListener('click', () => toggleRecordFavorite(record)); row.append(thumb, copy, favorite); els.historyList.append(row);
   });
 }
 
-function formatPenetration(p) {
-  if (!p) return 'N/A';
-  const key = p.toLowerCase();
-  if (key.includes('low')) return 'Faible';
-  if (key.includes('medium')) return 'Moyen';
-  if (key.includes('high')) return 'Élevé';
-  return p;
+function toggleRecordFavorite(record) {
+  const index = state.favorites.findIndex(item => item.comboId === record.comboId);
+  if (index >= 0) state.favorites.splice(index, 1); else state.favorites.unshift({ ...record, id: undefined });
+  writeStorage(FAVORITES_KEY, state.favorites); renderHistory(); updateFavoriteButton();
 }
 
-function penetrationPct(p) {
-  if (!p) return 0;
-  const key = p.toLowerCase();
-  if (key.includes('low')) return 33;
-  if (key.includes('medium')) return 66;
-  if (key.includes('high')) return 100;
-  return 0;
-}
+function setStatus(className, label) { els.status.className = `api-status ${className}`; els.status.querySelector('span').textContent = label; }
 
-// =============================================
-// LOADING
-// =============================================
-function showLoading(show) {
-  const el = document.getElementById('loadingOverlay');
-  el.classList.toggle('hidden', !show);
-}
-
-// =============================================
-// TOAST
-// =============================================
 let toastTimer;
-function showToast(msg) {
-  const el = document.getElementById('toast');
-  el.textContent = msg;
-  el.classList.remove('hidden');
-  el.classList.add('show');
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => {
-    el.classList.remove('show');
-    setTimeout(() => el.classList.add('hidden'), 300);
-  }, 3000);
-}
+function toast(message) { clearTimeout(toastTimer); els.toast.textContent = message; els.toast.classList.add('is-visible'); toastTimer = setTimeout(() => els.toast.classList.remove('is-visible'), 2400); }
 
-// =============================================
-// PARTICLES BACKGROUND
-// =============================================
-function initParticles() {
-  const container = document.getElementById('bgParticles');
-  for (let i = 0; i < 14; i++) {
-    const p = document.createElement('div');
-    p.className = 'particle';
-    const size = Math.random() * 120 + 40;
-    p.style.cssText = `
-      width: ${size}px;
-      height: ${size}px;
-      left: ${Math.random() * 100}%;
-      animation-duration: ${Math.random() * 12 + 10}s;
-      animation-delay: ${Math.random() * 8}s;
-    `;
-    container.appendChild(p);
+function burst() {
+  if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  for (let i = 0; i < 10; i += 1) {
+    const shard = document.createElement('i'); const angle = (Math.PI * 2 * i) / 10; shard.style.cssText = `position:fixed;z-index:150;left:68%;top:60%;width:4px;height:9px;background:${i % 2 ? '#f4f1eb' : '#ff4655'};pointer-events:none;transition:.65s cubic-bezier(.2,.8,.2,1)`; document.body.append(shard);
+    requestAnimationFrame(() => { shard.style.transform = `translate(${Math.cos(angle) * 100}px,${Math.sin(angle) * 100}px) rotate(140deg)`; shard.style.opacity = '0'; }); setTimeout(() => shard.remove(), 700);
   }
 }
 
-// =============================================
-// CONFETTI BURST (lightweight)
-// =============================================
-function triggerConfetti() {
-  const colors = ['#FF4655', '#ece8e1', '#e2b96f', '#00b4d8'];
-  const container = document.body;
-
-  for (let i = 0; i < 18; i++) {
-    const dot = document.createElement('div');
-    const size = Math.random() * 6 + 3;
-    const color = colors[Math.floor(Math.random() * colors.length)];
-    const x = Math.random() * window.innerWidth;
-    const duration = Math.random() * 0.8 + 0.6;
-    const distance = -(Math.random() * 200 + 100);
-
-    dot.style.cssText = `
-      position: fixed;
-      left: ${x}px;
-      bottom: 30%;
-      width: ${size}px;
-      height: ${size}px;
-      border-radius: 50%;
-      background: ${color};
-      pointer-events: none;
-      z-index: 9999;
-      transform: translateY(0);
-      transition: transform ${duration}s cubic-bezier(0.2, 0.8, 0.4, 1), opacity ${duration}s ease;
-      opacity: 1;
-    `;
-    container.appendChild(dot);
-
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        dot.style.transform = `translateY(${distance}px) translateX(${(Math.random() - 0.5) * 80}px) rotate(${Math.random() * 360}deg)`;
-        dot.style.opacity = '0';
-      });
-    });
-
-    setTimeout(() => dot.remove(), duration * 1000 + 100);
-  }
-}
-
-// =============================================
-// START
-// =============================================
 init();
